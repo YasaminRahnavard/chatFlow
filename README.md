@@ -17,6 +17,7 @@ A comprehensive Docker-powered chat application demonstrating modern cloud compu
 - [Deployment](#-deployment)
 - [Monitoring](#-monitoring)
 - [Troubleshooting](#-troubleshooting)
+- [Use Cases & Applications](#-use-cases--applications)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -669,9 +670,6 @@ This ChatFlow platform serves as an excellent foundation for various application
 - **Content Generation**: Automated content creation and optimization
 - **Smart Recommendations**: Personalized suggestions based on chat history
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
 
 ### Development Workflow
 
