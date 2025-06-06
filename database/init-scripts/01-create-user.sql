@@ -1,0 +1,1 @@
+CREATE USER chatuser WITH PASSWORD 'chatpassword123'; GRANT ALL PRIVILEGES ON DATABASE chatdb TO chatuser;

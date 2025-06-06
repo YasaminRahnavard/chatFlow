@@ -1,0 +1,226 @@
+# ChatFlow - Complete Docker-Based Chat Platform
+# A comprehensive Docker project demonstrating cloud computing concepts
+# Features: Multi-service architecture, container orchestration, networking, and AI integration
+
+# CUSTOM NETWORKS for secure inter-service communication
+networks:
+  frontend-tier:
+    driver: bridge
+    # Frontend network for UI and client-facing services
+  backend-tier:
+    driver: bridge
+    # Backend network for API services and business logic
+  database-tier:
+    driver: bridge
+    internal: true  # Database network is internal-only for security
+    # Isolated network for database communications
+
+# PERSISTENT VOLUMES for data storage
+volumes:
+  postgres-data:
+    # PostgreSQL data persistence
+  redis-data:
+    # Redis cache data persistence
+
+# SERVICES DEFINITION
+services:
+
+  # Frontend Service (React + Vite + Nginx)
+  web-ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: chatflow-frontend
+    restart: unless-stopped
+    ports:
+      - "3005:3000"
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_API_URL=http://localhost:8003
+      - REACT_APP_AI_API_URL=http://localhost:8002
+      - REACT_APP_APP_NAME=ChatFlow
+    networks:
+      - frontend-tier
+      - backend-tier
+    depends_on:
+      - api-server
+      - chat-ai
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "project=chatflow"
+      - "service=frontend"
+      - "description=React-based chat interface"
+
+  # Backend Service (Django + PostgreSQL)
+  api-server:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: chatflow-backend
+    restart: unless-stopped
+    ports:
+      - "8003:8000"
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - REDIS_URL=${REDIS_URL}
+      - APP_NAME=ChatFlow
+    networks:
+      - backend-tier
+      - database-tier
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    labels:
+      - "project=chatflow"
+      - "service=backend"
+      - "description=Django REST API server"
+
+  # AI Service (FastAPI + Gemini API)
+  chat-ai:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: chatflow-ai
+    restart: unless-stopped
+    ports:
+      - "8002:8001"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - REDIS_URL=${REDIS_URL}
+      - APP_NAME=ChatFlow
+    networks:
+      - backend-tier
+    depends_on:
+      redis-cache:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "project=chatflow"
+      - "service=ai"
+      - "description=FastAPI AI service with Gemini integration"
+
+  # Database Service (PostgreSQL)
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: chatflow-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    networks:
+      - database-tier
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init-scripts:/docker-entrypoint-initdb.d:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      - "project=chatflow"
+      - "service=database"
+      - "description=PostgreSQL primary database"
+
+  # Cache Service (Redis)
+  redis-cache:
+    image: redis:7-alpine
+    container_name: chatflow-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ""
+    networks:
+      - database-tier
+      - backend-tier
+    volumes:
+      - redis-data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "project=chatflow"
+      - "service=cache"
+      - "description=Redis cache and session storage"
+
+  # Monitoring Service (Optional - for advanced users)
+  # Uncomment to enable container monitoring with Prometheus
+  # monitoring:
+  #   image: prom/prometheus:latest
+  #   container_name: chatflow-monitoring
+  #   ports:
+  #     - "9090:9090"
+  #   networks:
+  #     - backend-tier
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #   labels:
+  #     - "project=chatflow"
+  #     - "service=monitoring"
+  #     - "description=Prometheus monitoring system"
+  #   restart: unless-stopped 
